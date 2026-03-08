@@ -1,0 +1,23 @@
+# Source files
+src/
+test/
+
+# Configuration files
+tsconfig.json
+jest.config.js
+eslint.config.mjs
+.eslintrc*
+.github/
+
+# Development files
+*.log
+.DS_Store
+.idea
+.vscode
+
+# Build artifacts that shouldn't be published
+coverage/
+test-reports/
+node_modules/
+
+# Only dist/ should be published (configured in package.json files field)

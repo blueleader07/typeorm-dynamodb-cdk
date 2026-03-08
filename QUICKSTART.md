@@ -144,6 +144,20 @@ createTables(this, {
 })
 ```
 
+### Add Custom Tags
+
+```typescript
+createTables(this, {
+  entities: './src/entities',
+  tags: {
+    'environment': 'production',
+    'team': 'platform',
+    'cost-center': '12345',
+    'backup-policy': 'daily'
+  }
+})
+```
+
 ## Common Patterns
 
 ### Separate Stacks for Different Environments
@@ -162,7 +176,10 @@ createTables(this, {
   schema: 'prod',
   removalPolicy: RemovalPolicy.RETAIN,
   pointInTimeRecovery: true,
-  awsBackupTag: 'dpm-sr-daily'
+  tags: {
+    'backup-schedule': 'daily',
+    'environment': 'production'
+  }
 })
 ```
 

@@ -48,7 +48,7 @@ typeorm-dynamodb-cdk/
 4. **IAM Permissions**: Automated IAM policy management
 5. **DynamoDB Streams**: Configurable stream settings per table
 6. **Global Tables**: Multi-region replication support (TableV2)
-7. **Backup Configuration**: AWS Backup tag management
+7. **Tags**: Flexible tag configuration (users provide any tags they need)
 8. **Point-in-Time Recovery**: Optional PITR support
 
 ### Code Quality & Testing

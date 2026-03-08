@@ -14,7 +14,7 @@ export class TableDetails {
     removalPolicy?: RemovalPolicy
     timeToLiveAttribute?: string
     pointInTimeRecovery?: boolean
-    awsBackupTag?: string
+    tags?: Record<string, string>
     replicas?: ReplicaTableProps[]
     v2?: boolean
 }

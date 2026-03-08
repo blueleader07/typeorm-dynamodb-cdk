@@ -11,7 +11,6 @@ import { TableDetails } from './models/table-details'
 import { scan } from './parsers/annotation-parser'
 import { Effect, IGrantable, PolicyStatement, Role, User } from 'aws-cdk-lib/aws-iam'
 import { IndexDetails } from './models/index-details'
-import { AwsBackupTag } from './models/aws-backup-tag'
 import { ReplicaTableProps } from 'aws-cdk-lib/aws-dynamodb/lib/table-v2'
 
 export interface StreamViewTypes {
@@ -25,7 +24,7 @@ class DynamodbTableCreatorOptions {
     overrideTableIds?: Map<string, string>
     streams?: StreamViewTypes
     pointInTimeRecovery?: boolean
-    awsBackupTag?: AwsBackupTag
+    tags?: Record<string, string>
     removalPolicy?: RemovalPolicy
     replicas?: ReplicaTableProps[]
     v2?: boolean
@@ -88,7 +87,7 @@ export const buildTable = (scope: Construct, id: string, tableDetails: TableDeta
         if (isReplicaRegion(region, replicas)) {
             return TableV2.fromTableName(scope, id, tableDetails.tableName!) as TableV2
         }
-        return new TableV2(scope, id, {
+        const tableConfig: any = {
             tableName: tableDetails.tableName,
             billing: Billing.onDemand(),
             partitionKey: tableDetails.partitionKey,
@@ -104,14 +103,15 @@ export const buildTable = (scope: Construct, id: string, tableDetails: TableDeta
                     sortKey: index.sortKey,
                     projectionType: ProjectionType.ALL
                 }
-            }),
-            tags: [
-                {
-                    key: 'dpmawsbackup',
-                    value: tableDetails.awsBackupTag || 'dpm-sr-daily'
-                }
-            ]
-        })
+            })
+        }
+        const tableV2 = new TableV2(scope, id, tableConfig)
+        if (tableDetails.tags) {
+            Object.entries(tableDetails.tags).forEach(([key, value]) => {
+                Tags.of(tableV2).add(key, value)
+            })
+        }
+        return tableV2
     } else {
         if (isReplicaRegion(region, replicas)) {
             return Table.fromTableName(scope, id, tableDetails.tableName!) as Table
@@ -127,7 +127,11 @@ export const buildTable = (scope: Construct, id: string, tableDetails: TableDeta
             replicationRegions: replicas.map(replica => replica.region)
         })
         addTableIndices(indexDetails, table)
-        Tags.of(table).add('dpmawsbackup', tableDetails.awsBackupTag || 'dpm-sr-daily')
+        if (tableDetails.tags) {
+            Object.entries(tableDetails.tags).forEach(([key, value]) => {
+                Tags.of(table).add(key, value)
+            })
+        }
         return table
     }
 }
@@ -238,7 +242,7 @@ const fromArray = (scope: Construct, options: DynamodbTableCreatorTypeOptions) =
         tableDetails.tableName = buildTableName(tableDetails)
         tableDetails.stream = streams[tableDetails.tableName]
         tableDetails.pointInTimeRecovery = options.pointInTimeRecovery
-        tableDetails.awsBackupTag = options.awsBackupTag
+        tableDetails.tags = options.tags
         tableDetails.removalPolicy = options.removalPolicy
         tableDetails.replicas = options.replicas
         tableDetails.v2 = options.v2
@@ -315,7 +319,7 @@ const fromPath = (scope: Construct, options: DynamodbTableCreatorPathOptions) =>
         tableDetails.tableName = buildTableName(tableDetails)
         tableDetails.stream = streams[tableDetails.tableName]
         tableDetails.pointInTimeRecovery = options.pointInTimeRecovery
-        tableDetails.awsBackupTag = options.awsBackupTag
+        tableDetails.tags = options.tags
         tableDetails.removalPolicy = options.removalPolicy
         tableDetails.replicas = options.replicas
         tableDetails.v2 = options.v2

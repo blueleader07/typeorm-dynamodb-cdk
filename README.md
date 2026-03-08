@@ -88,8 +88,12 @@ export class MyStack extends Stack {
       // Set removal policy
       removalPolicy: RemovalPolicy.RETAIN,
       
-      // Configure AWS Backup tags
-      awsBackupTag: 'dpm-sr-daily',
+      // Add custom tags (additive - won't overwrite stack tags)
+      tags: {
+        'backup-schedule': 'daily',
+        'environment': 'production',
+        'cost-center': 'engineering'
+      },
       
       // Use TableV2 (global tables)
       v2: true
@@ -176,7 +180,7 @@ Creates DynamoDB tables based on TypeORM entities.
 - `grantFullAccess?: IGrantable[]` - IAM principals to grant full table access
 - `streams?: StreamViewTypes` - Map of table names to stream view types
 - `pointInTimeRecovery?: boolean` - Enable point-in-time recovery
-- `awsBackupTag?: AwsBackupTag` - AWS Backup tag value
+- `tags?: Record<string, string>` - Key-value tags to apply to tables (additive with stack tags)
 - `removalPolicy?: RemovalPolicy` - Table removal policy (default: DESTROY)
 - `replicas?: ReplicaTableProps[]` - Regions for global table replication
 - `v2?: boolean` - Use TableV2 for global tables
@@ -200,15 +204,23 @@ When configuring streams, use AWS CDK's `StreamViewType` enum:
 - `StreamViewType.NEW_AND_OLD_IMAGES` - Both new and old items
 - `StreamViewType.KEYS_ONLY` - Only the keys
 
-### AWS Backup Tags
+### Tags
 
-Supported backup tag values:
-- `'dpm-sr-daily'` (default)
-- `'dpm-sr-cr-fs-hourly'`
-- `'dpm-sr-cr-fs-4hourly'`
-- `'dpm-sr-cr-fs-daily'`
-- `'dpm-sr-fs-daily'`
-- `'none'`
+Add custom tags to your DynamoDB tables:
+
+```typescript
+createTables(this, {
+  entities: './src/entities',
+  tags: {
+    'backup-policy': 'production-daily',
+    'environment': 'production',
+    'team': 'platform',
+    'cost-center': '12345'
+  }
+})
+```
+
+Tags are **additive** - they are added to any tags inherited from the parent stack and won't overwrite stack-level tags. You can use any key-value pairs that fit your organization's tagging strategy.
 
 ## Table Naming Convention
 

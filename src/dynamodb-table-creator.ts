@@ -28,13 +28,6 @@ class DynamodbTableCreatorOptions {
     removalPolicy?: RemovalPolicy
     replicas?: ReplicaTableProps[]
     v2?: boolean
-    /**
-     * When provided, a single wildcard IAM policy statement is used instead of
-     * collecting per-table ARNs. This prevents inline policy overflow for stacks
-     * with many tables. Example: 'arn:aws:dynamodb:*:*:table/production.myapp.*'
-     * Both the table ARN and its index ARN (<pattern>/index/*) are granted.
-     */
-    tableArnPattern?: string
 }
 
 export class DynamodbTableCreatorPathOptions extends DynamodbTableCreatorOptions {
@@ -235,13 +228,18 @@ const addToResourcePolicy = (options: AddToResourcePolicyOptions) => {
     }
 }
 
+const buildWildcardArn = (scope: Construct, options: DynamodbTableCreatorOptions): string => {
+    const stack = Stack.of(scope)
+    const parts = [options.database, options.schema].filter(Boolean)
+    const prefix = parts.length > 0 ? `${parts.join('.')}.` : ''
+    return `arn:aws:dynamodb:${stack.region}:${stack.account}:table/${prefix}*`
+}
+
 const fromArray = (scope: Construct, options: DynamodbTableCreatorTypeOptions) => {
     const streams = options.streams || {}
     const entities = Array.isArray(options.entities) ? options.entities : []
     const grantables = options.grantFullAccess || []
 
-    // Build all tables and collect ARNs in single pass
-    const allTableArns: string[] = []
     const tables = entities.map(entity => {
         const tableDetails = { ...entity.tableDetails }
         tableDetails.schema = options.schema || tableDetails.schema
@@ -254,26 +252,14 @@ const fromArray = (scope: Construct, options: DynamodbTableCreatorTypeOptions) =
         tableDetails.replicas = options.replicas
         tableDetails.v2 = options.v2
         const table = buildTable(scope, buildTableId(tableDetails.tableName, options.overrideTableIds), tableDetails, entity.indexDetails)
-
-        // Collect ARNs while building (only needed when not using tableArnPattern)
-        if (grantables.length > 0 && !options.tableArnPattern) {
-            allTableArns.push(table.tableArn)
-            allTableArns.push(`${table.tableArn}/index/*`)
-        }
-
         return { table, tableDetails }
     })
 
-    // Grant consolidated permissions
     if (grantables.length > 0 && tables.length > 0) {
-        // When tableArnPattern is provided, use a single wildcard statement to avoid
-        // inline policy overflow for stacks with many tables.
-        const policyResources = options.tableArnPattern
-            ? [options.tableArnPattern, `${options.tableArnPattern}/index/*`]
-            : allTableArns
+        const wildcardArn = buildWildcardArn(scope, options)
+        const policyResources = [wildcardArn, `${wildcardArn}/index/*`]
 
         grantables.forEach(grantable => {
-            // Add consolidated identity-based policy to the IAM role
             if (grantable instanceof Role) {
                 grantable.addToPrincipalPolicy(
                     new PolicyStatement({
@@ -297,12 +283,6 @@ const fromArray = (scope: Construct, options: DynamodbTableCreatorTypeOptions) =
                 )
             }
 
-            // NOTE: Resource-based policy removed to fix circular dependency with CDK 2.235+
-            // The identity-based policy (addToPrincipalPolicy above) is sufficient.
-            // Adding a resource policy to tables[0] referencing ALL table ARNs creates
-            // a self-referential dependency that CloudFormation detects as a cycle.
-
-            // Handle stream policies individually (these are table-specific)
             tables.forEach(({ table, tableDetails }) => {
                 if (tableDetails.stream) {
                     addToResourcePolicy({
@@ -324,8 +304,6 @@ const fromPath = (scope: Construct, options: DynamodbTableCreatorPathOptions) =>
     const allTableDetails = scan(options.entities)
     const grantables = options.grantFullAccess || []
 
-    // Build all tables and collect ARNs in single pass
-    const allTableArns: string[] = []
     const tables = allTableDetails.map((tableDetails: TableDetails) => {
         tableDetails.schema = options.schema || tableDetails.schema
         tableDetails.database = options.database || tableDetails.database
@@ -337,26 +315,14 @@ const fromPath = (scope: Construct, options: DynamodbTableCreatorPathOptions) =>
         tableDetails.replicas = options.replicas
         tableDetails.v2 = options.v2
         const table = buildTable(scope, buildTableId(tableDetails.tableName, options.overrideTableIds), tableDetails, tableDetails.indexes)
-
-        // Collect ARNs while building (only needed when not using tableArnPattern)
-        if (grantables.length > 0 && !options.tableArnPattern) {
-            allTableArns.push(table.tableArn)
-            allTableArns.push(`${table.tableArn}/index/*`)
-        }
-
         return { table, tableDetails }
     })
 
-    // Grant consolidated permissions
     if (grantables.length > 0 && tables.length > 0) {
-        // When tableArnPattern is provided, use a single wildcard statement to avoid
-        // inline policy overflow for stacks with many tables.
-        const policyResources = options.tableArnPattern
-            ? [options.tableArnPattern, `${options.tableArnPattern}/index/*`]
-            : allTableArns
+        const wildcardArn = buildWildcardArn(scope, options)
+        const policyResources = [wildcardArn, `${wildcardArn}/index/*`]
 
         grantables.forEach(grantable => {
-            // Add consolidated identity-based policy to the IAM role
             if (grantable instanceof Role) {
                 grantable.addToPrincipalPolicy(
                     new PolicyStatement({
@@ -380,12 +346,6 @@ const fromPath = (scope: Construct, options: DynamodbTableCreatorPathOptions) =>
                 )
             }
 
-            // NOTE: Resource-based policy removed to fix circular dependency with CDK 2.235+
-            // The identity-based policy (addToPrincipalPolicy above) is sufficient.
-            // Adding a resource policy to tables[0] referencing ALL table ARNs creates
-            // a self-referential dependency that CloudFormation detects as a cycle.
-
-            // Handle stream policies individually (these are table-specific)
             tables.forEach(({ table, tableDetails }) => {
                 if (tableDetails.stream) {
                     addToResourcePolicy({

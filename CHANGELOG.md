@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.0] - 2026-06-18
+
+### Added
+- `tableArnPattern` option on `DynamodbTableCreatorOptions` — when provided, a single wildcard
+  IAM policy statement is used instead of collecting per-table ARNs. This prevents inline policy
+  document overflow (AWS 10KB limit) for stacks with many tables, which previously caused CDK to
+  generate an `OverflowPolicy` managed policy that failed deployment due to CloudFormation ordering
+  issues. Both the pattern and its index variant (`<pattern>/index/*`) are granted.
+  Example: `tableArnPattern: 'arn:aws:dynamodb:*:*:table/production.myapp.*'`
+
+### Fixed
+- `package-lock.json` regenerated against public npm registry (`registry.npmjs.org`) — previously
+  contained references to an internal Artifactory mirror.
+
 ## [1.0.0] - 2026-03-08
 
 ### Added

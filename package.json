@@ -1,6 +1,6 @@
 {
   "name": "typeorm-dynamodb-cdk",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "description": "AWS CDK utilities to scan TypeORM entities and create DynamoDB tables",
   "main": "./dist/index.js",
   "typings": "./dist/index.d.ts",

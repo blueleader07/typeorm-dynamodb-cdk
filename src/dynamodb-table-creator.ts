@@ -28,6 +28,13 @@ class DynamodbTableCreatorOptions {
     removalPolicy?: RemovalPolicy
     replicas?: ReplicaTableProps[]
     v2?: boolean
+    /**
+     * When provided, a single wildcard IAM policy statement is used instead of
+     * collecting per-table ARNs. This prevents inline policy overflow for stacks
+     * with many tables. Example: 'arn:aws:dynamodb:*:*:table/production.myapp.*'
+     * Both the table ARN and its index ARN (<pattern>/index/*) are granted.
+     */
+    tableArnPattern?: string
 }
 
 export class DynamodbTableCreatorPathOptions extends DynamodbTableCreatorOptions {
@@ -248,8 +255,8 @@ const fromArray = (scope: Construct, options: DynamodbTableCreatorTypeOptions) =
         tableDetails.v2 = options.v2
         const table = buildTable(scope, buildTableId(tableDetails.tableName, options.overrideTableIds), tableDetails, entity.indexDetails)
 
-        // Collect ARNs while building
-        if (grantables.length > 0) {
+        // Collect ARNs while building (only needed when not using tableArnPattern)
+        if (grantables.length > 0 && !options.tableArnPattern) {
             allTableArns.push(table.tableArn)
             allTableArns.push(`${table.tableArn}/index/*`)
         }
@@ -259,6 +266,12 @@ const fromArray = (scope: Construct, options: DynamodbTableCreatorTypeOptions) =
 
     // Grant consolidated permissions
     if (grantables.length > 0 && tables.length > 0) {
+        // When tableArnPattern is provided, use a single wildcard statement to avoid
+        // inline policy overflow for stacks with many tables.
+        const policyResources = options.tableArnPattern
+            ? [options.tableArnPattern, `${options.tableArnPattern}/index/*`]
+            : allTableArns
+
         grantables.forEach(grantable => {
             // Add consolidated identity-based policy to the IAM role
             if (grantable instanceof Role) {
@@ -279,7 +292,7 @@ const fromArray = (scope: Construct, options: DynamodbTableCreatorTypeOptions) =
                             'dynamodb:DeleteItem',
                             'dynamodb:DescribeTable'
                         ],
-                        resources: allTableArns
+                        resources: policyResources
                     })
                 )
             }
@@ -325,8 +338,8 @@ const fromPath = (scope: Construct, options: DynamodbTableCreatorPathOptions) =>
         tableDetails.v2 = options.v2
         const table = buildTable(scope, buildTableId(tableDetails.tableName, options.overrideTableIds), tableDetails, tableDetails.indexes)
 
-        // Collect ARNs while building
-        if (grantables.length > 0) {
+        // Collect ARNs while building (only needed when not using tableArnPattern)
+        if (grantables.length > 0 && !options.tableArnPattern) {
             allTableArns.push(table.tableArn)
             allTableArns.push(`${table.tableArn}/index/*`)
         }
@@ -336,6 +349,12 @@ const fromPath = (scope: Construct, options: DynamodbTableCreatorPathOptions) =>
 
     // Grant consolidated permissions
     if (grantables.length > 0 && tables.length > 0) {
+        // When tableArnPattern is provided, use a single wildcard statement to avoid
+        // inline policy overflow for stacks with many tables.
+        const policyResources = options.tableArnPattern
+            ? [options.tableArnPattern, `${options.tableArnPattern}/index/*`]
+            : allTableArns
+
         grantables.forEach(grantable => {
             // Add consolidated identity-based policy to the IAM role
             if (grantable instanceof Role) {
@@ -356,7 +375,7 @@ const fromPath = (scope: Construct, options: DynamodbTableCreatorPathOptions) =>
                             'dynamodb:DeleteItem',
                             'dynamodb:DescribeTable'
                         ],
-                        resources: allTableArns
+                        resources: policyResources
                     })
                 )
             }

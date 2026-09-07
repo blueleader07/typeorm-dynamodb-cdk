@@ -149,80 +149,64 @@ const getGrantableArn = (grantable: IGrantable): string | undefined => {
 interface AddToResourcePolicyOptions {
     table: Table | TableV2
     stream?: StreamViewType
-    grantable: IGrantable,
+    grantableArns: string[]
     v2?: boolean
 }
 
-const addToResourcePolicy = (options: AddToResourcePolicyOptions) => {
-    const { table, stream, grantable, v2 } = options
-    const grantableArn = getGrantableArn(grantable)
-    if (grantableArn && stream) {
-        if (stream) {
-            if (v2) {
-                const cfnTable = table.node.defaultChild as CfnGlobalTable
-                if (cfnTable) {
-                    const tableStack = Stack.of(table)
-                    const replicas = tableStack.resolve(cfnTable.replicas) as CfnGlobalTable.ReplicaSpecificationProperty[]
-                    if (Array.isArray(replicas)) {
-                        cfnTable.replicas = replicas.map(replica => {
-                            return {
-                                ...replica,
-                                replicaStreamSpecification: {
-                                    streamViewType: stream,
-                                    resourcePolicy: {
-                                        policyDocument: {
-                                            Version: '2012-10-17',
-                                            Statement: [
-                                                {
-                                                    Effect: 'Allow',
-                                                    Principal: { AWS: '*' },
-                                                    Action: [
-                                                        'dynamodb:DescribeStream',
-                                                        'dynamodb:GetRecords',
-                                                        'dynamodb:GetShardIterator'
-                                                    ],
-                                                    Resource: '*',
-                                                    Condition: {
-                                                        StringEquals: {
-                                                            'aws:PrincipalArn': grantableArn
-                                                        }
-                                                    }
-                                                }
-                                            ]
-                                        }
-                                    }
-                                }
-                            }
-                        })
-                    }
+// A stream resource policy holds ONE document, so every grantable ARN must be
+// listed together in a single aws:PrincipalArn condition. Writing one grantable
+// at a time would overwrite the previous, leaving only the last one granted.
+const buildStreamResourcePolicyDocument = (grantableArns: string[]) => ({
+    Version: '2012-10-17',
+    Statement: [
+        {
+            Effect: 'Allow',
+            Principal: { AWS: '*' },
+            Action: [
+                'dynamodb:DescribeStream',
+                'dynamodb:GetRecords',
+                'dynamodb:GetShardIterator'
+            ],
+            Resource: '*',
+            Condition: {
+                StringEquals: {
+                    'aws:PrincipalArn': grantableArns
                 }
-            } else {
-                const cfnTable: any = table.node.defaultChild
-                cfnTable.streamSpecification = {
-                    streamViewType: stream,
-                    resourcePolicy: {
-                        policyDocument: {
-                            Version: '2012-10-17',
-                            Statement: [
-                                {
-                                    Effect: 'Allow',
-                                    Principal: { AWS: '*' },
-                                    Action: [
-                                        'dynamodb:DescribeStream',
-                                        'dynamodb:GetRecords',
-                                        'dynamodb:GetShardIterator'
-                                    ],
-                                    Resource: '*',
-                                    Condition: {
-                                        StringEquals: {
-                                            'aws:PrincipalArn': grantableArn
-                                        }
-                                    }
-                                }
-                            ]
+            }
+        }
+    ]
+})
+
+const addToResourcePolicy = (options: AddToResourcePolicyOptions) => {
+    const { table, stream, grantableArns, v2 } = options
+    if (!stream || grantableArns.length === 0) {
+        return
+    }
+    if (v2) {
+        const cfnTable = table.node.defaultChild as CfnGlobalTable
+        if (cfnTable) {
+            const tableStack = Stack.of(table)
+            const replicas = tableStack.resolve(cfnTable.replicas) as CfnGlobalTable.ReplicaSpecificationProperty[]
+            if (Array.isArray(replicas)) {
+                cfnTable.replicas = replicas.map(replica => {
+                    return {
+                        ...replica,
+                        replicaStreamSpecification: {
+                            streamViewType: stream,
+                            resourcePolicy: {
+                                policyDocument: buildStreamResourcePolicyDocument(grantableArns)
+                            }
                         }
                     }
-                }
+                })
+            }
+        }
+    } else {
+        const cfnTable: any = table.node.defaultChild
+        cfnTable.streamSpecification = {
+            streamViewType: stream,
+            resourcePolicy: {
+                policyDocument: buildStreamResourcePolicyDocument(grantableArns)
             }
         }
     }
@@ -282,17 +266,21 @@ const fromArray = (scope: Construct, options: DynamodbTableCreatorTypeOptions) =
                     })
                 )
             }
+        })
 
-            tables.forEach(({ table, tableDetails }) => {
-                if (tableDetails.stream) {
-                    addToResourcePolicy({
-                        table,
-                        stream: tableDetails.stream,
-                        grantable,
-                        v2: options.v2
-                    })
-                }
-            })
+        const grantableArns = grantables
+            .map(getGrantableArn)
+            .filter((arn): arn is string => !!arn)
+
+        tables.forEach(({ table, tableDetails }) => {
+            if (tableDetails.stream) {
+                addToResourcePolicy({
+                    table,
+                    stream: tableDetails.stream,
+                    grantableArns,
+                    v2: options.v2
+                })
+            }
         })
     }
 
@@ -345,17 +333,21 @@ const fromPath = (scope: Construct, options: DynamodbTableCreatorPathOptions) =>
                     })
                 )
             }
+        })
 
-            tables.forEach(({ table, tableDetails }) => {
-                if (tableDetails.stream) {
-                    addToResourcePolicy({
-                        table,
-                        stream: tableDetails.stream,
-                        grantable,
-                        v2: options.v2
-                    })
-                }
-            })
+        const grantableArns = grantables
+            .map(getGrantableArn)
+            .filter((arn): arn is string => !!arn)
+
+        tables.forEach(({ table, tableDetails }) => {
+            if (tableDetails.stream) {
+                addToResourcePolicy({
+                    table,
+                    stream: tableDetails.stream,
+                    grantableArns,
+                    v2: options.v2
+                })
+            }
         })
     }
 

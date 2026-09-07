@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.3] - 2026-09-06
+
+### Fixed
+- Stream resource policy now grants EVERY entry in `grantFullAccess`, not just the last one.
+  When multiple grantables were supplied (e.g. `[role, dbWorkerRole]`), the per-grantable resource
+  policy write overwrote the previous, leaving only the final grantable able to read the stream.
+  Any other consumer running as an earlier grantable's role got `Cannot access stream` from Lambda
+  event source mappings. All grantable ARNs are now collected into a single `aws:PrincipalArn`
+  condition (OR semantics) and written once per table, for both the `v2` (replica) and non-`v2`
+  (`streamSpecification`) code paths.
+
 ## [1.2.0] - 2026-06-18
 
 ### Changed
